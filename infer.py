@@ -1,26 +1,28 @@
 from transformers import AutoTokenizer, AutoModelForCausalLM
-import sys
 import re
 import torch
 import numpy as np
 import soundfile as sf
 from sparktts.models.audio_tokenizer import BiCodecTokenizer
-
 device="cuda" if torch.cuda.is_available() else "cpu"
 
+#model path: chose the charactor voice
 model_path='/home/max/Downloads/genshin-tts/furina'
-# model_path='/home/max/python/p1/sparktts/models/furina-tts'
-audio_tokenizer_path='/home/max/python/p1/sparktts/Spark-TTS-0.5B'
 
-input_text='你还好吗，要不要吃我的奶油蛋糕?这是限量版的哦!'
+#audio tokenizer path: an pretrained model that is used to encode the audio
+audio_tokenizer_path='/home/max/Downloads/genshin-tts/Spark-TTS-0.5B'
 
+#input text (only finetuned on chinese dataset)
+input_text=input('请输入文本：')
+
+#max length of the audio part
 max_seq_length=1024
 chosen_voice=None
+
 
 model = AutoModelForCausalLM.from_pretrained(model_path,device_map=device)
 tokenizer = AutoTokenizer.from_pretrained(model_path)
 audio_tokenizer = BiCodecTokenizer(audio_tokenizer_path,device)
-
 
 @torch.inference_mode()
 def generate_speech_from_text(
@@ -70,7 +72,7 @@ def generate_speech_from_text(
         pad_token_id=tokenizer.pad_token_id # Use models pad token id
     )
     print("Token sequence generated.")
-    print(f'length of generated_ids: {len(generated_ids[0])}')
+    # print(f'length of generated_ids: {len(generated_ids[0])}')
 
     generated_ids_trimmed = generated_ids[:, model_inputs.input_ids.shape[1]:]
 
@@ -118,7 +120,7 @@ def generate_speech_from_text(
         pred_semantic_ids.to(device)           # Shape (1, N_semantic)
     )
     print("Detokenization complete.")
-    print(f'wav np shape:{wav_np.shape}')
+    # print(f'wav np shape:{wav_np.shape}')
     return wav_np
 
 def infer(model, tokenizer, input_text):
