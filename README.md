@@ -17,3 +17,7 @@
 * xiao(魈):['play'](./examples/xiao.wav)
 * furina(芙宁娜):['play'](./examples/furina.wav)
 * hutao(胡桃):['play'](./examples/hutao.wav)
+## Acknowledgement
+* [Spark-TTS](https://github.com/SparkAudio/Spark-TTS)
+* [Genshin dataset](https://huggingface.co/datasets/simon3000/genshin-voice)
+* [Unsloth](https://github.com/unslothai/unsloth)
