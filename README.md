@@ -9,3 +9,11 @@
 * change the model path and audio tokenizer path in the code.
 * run the code by python infer.py
 # Example
+## poetry:
+* kazuha(万叶):['play'](./examples/kazuha.wav)
+* paimon(派蒙):['play'](./examples/paimon.wav)
+* citlali(茜特拉莉)['play'](./examples/citlali.wav)
+## congradulations:
+* xiao(魈):['play'](./examples/xiao.wav)
+* furina(芙宁娜):['play'](./examples/furina.wav)
+* hutao(胡桃):['play'](./examples/hutao.wav)

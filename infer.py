@@ -7,13 +7,13 @@ from sparktts.models.audio_tokenizer import BiCodecTokenizer
 device="cuda" if torch.cuda.is_available() else "cpu"
 
 #model path: chose the charactor voice
-model_path='/home/max/Downloads/genshin-tts/furina'
+model_path='/home/max/Downloads/genshin-tts/citlali'
 
 #audio tokenizer path: an pretrained model that is used to encode the audio
 audio_tokenizer_path='/home/max/Downloads/genshin-tts/Spark-TTS-0.5B'
 
 #input text (only finetuned on chinese dataset)
-input_text=input('请输入文本：')
+input_text=input('input your text：')
 
 #max length of the audio part
 max_seq_length=1024
@@ -27,7 +27,7 @@ audio_tokenizer = BiCodecTokenizer(audio_tokenizer_path,device)
 @torch.inference_mode()
 def generate_speech_from_text(
     text: str,
-    temperature: float = 0.6,   # Generation temperature
+    temperature: float = 0.65,   # Generation temperature
     top_k: int = 40,            # Generation top_k
     top_p: float = 1,        # Generation top_p
     max_new_audio_tokens: int = max_seq_length, # Max tokens for audio part
