@@ -1,6 +1,8 @@
 from huggingface_hub import snapshot_download
+import os
+print('charactor. chose from [lora,furina,hutao,paimon,xiao,kazuha,nilou,zhongli,venti,...]')
 
-charactor=input('which charactor? chose from [lora,furina,hutao,paimon,xiao,kazuha,nilou,zhongli,venti,...]')
+charactor=os.getenv('CHARACTOR','furina')
 
 based=snapshot_download(
     repo_id="wesjos/spark-tts-genshin-charactors",              # 仓库名

@@ -9,20 +9,21 @@ device="cuda" if torch.cuda.is_available() else "cpu"
 max_seq_length=512
 
 ##Set variables
+charactor='hutao'
 input_text="你好吗,今天过的怎么样呢？"
-model_path="/media/max/Hutao/genshin-tts-fp16/nilou"
-base_model_path="/media/max/Hutao/genshin-tts-fp16/Spark-TTS-0.5B"
+model_path="/media/max/Hutao/genshin-tts-fp16/"
 # You can also set the lora path if you want to use lora
 if_lora=False
-lora_path="/media/max/Hutao/genshin-tts-fp16/lora/furina"
+lora_path="genshin/lora"
 
 ##USE ENVIRONMENT VARIABLE TO SET THE MODEL PATH
 if_lora=os.getenv('IF_LORA',if_lora)
+charactor=os.getenv('CHARACTOR',charactor)
 input_text=os.getenv('INPUT_TEXT',input_text)
-model_path=os.getenv('MODEL_PATH',model_path)
-audio_tokenizer_path=os.getenv('BASE_MODEL_PATH',base_model_path)
-base_model_path=os.path.join(os.getenv('BASE_MODEL_PATH',base_model_path),'LLM')
-lora_path = os.getenv('LORA_PATH',lora_path)
+model_path=os.path.join(os.getenv('MODEL_PATH',model_path),charactor)
+audio_tokenizer_path=os.getenv('MODEL_PATH',model_path)
+base_model_path=os.path.join(os.getenv('BASE_MODEL_PATH',model_path),'LLM')
+lora_path = os.path.join(os.getenv('LORA_PATH',lora_path),charactor)
 
 
 if if_lora:
