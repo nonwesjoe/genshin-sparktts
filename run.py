@@ -21,8 +21,8 @@ if_lora=os.getenv('IF_LORA',if_lora)
 charactor=os.getenv('CHARACTOR',charactor)
 input_text=os.getenv('INPUT_TEXT',input_text)
 model_path=os.path.join(os.getenv('MODEL_PATH',model_path),charactor)
-audio_tokenizer_path=os.getenv('MODEL_PATH',model_path)
-base_model_path=os.path.join(os.getenv('BASE_MODEL_PATH',model_path),'LLM')
+audio_tokenizer_path=os.path.join(os.getenv('MODEL_PATH',model_path),'Spark-TTS-0.5B')
+base_model_path=os.path.join(os.getenv('BASE_MODEL_PATH',model_path),'Spark-TTS-0.5B/LLM')
 lora_path = os.path.join(os.getenv('LORA_PATH',lora_path),charactor)
 
 
