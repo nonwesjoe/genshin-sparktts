@@ -1,52 +1,19 @@
-from transformers import AutoTokenizer, AutoModelForCausalLM
 import re
 import torch
 import numpy as np
 import soundfile as sf
-from sparktts.models.audio_tokenizer import BiCodecTokenizer
-device="cuda" if torch.cuda.is_available() else "cpu"
-
-#model path: chose the charactor voice
-model_path='/home/max/Downloads/genshin-tts/citlali'
-
-#audio tokenizer path: an pretrained model that is used to encode the audio
-audio_tokenizer_path='/home/max/Downloads/genshin-tts/Spark-TTS-0.5B'
-
-#input text (only finetuned on chinese dataset)
-input_text=input('input your text：')
-
-#max length of the audio part
-max_seq_length=1024
-chosen_voice=None
-
-
-model = AutoModelForCausalLM.from_pretrained(model_path,device_map=device)
-tokenizer = AutoTokenizer.from_pretrained(model_path)
-audio_tokenizer = BiCodecTokenizer(audio_tokenizer_path,device)
 
 @torch.inference_mode()
 def generate_speech_from_text(
     text: str,
-    temperature: float = 0.65,   # Generation temperature
-    top_k: int = 40,            # Generation top_k
-    top_p: float = 1,        # Generation top_p
-    max_new_audio_tokens: int = max_seq_length, # Max tokens for audio part
-    device: torch.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-) -> np.ndarray:
-    """
-    Generates speech audio from text using default voice control parameters.
-
-    Args:
-        text (str): The text input to be converted to speech.
-        temperature (float): Sampling temperature for generation.
-        top_k (int): Top-k sampling parameter.
-        top_p (float): Top-p (nucleus) sampling parameter.
-        max_new_audio_tokens (int): Max number of new tokens to generate (limits audio length).
-        device (torch.device): Device to run inference on.
-
-    Returns:
-        np.ndarray: Generated waveform as a NumPy array.
-    """
+    model,
+    tokenizer,
+    audio_tokenizer,
+    temperature=0.65,   # Generation temperature
+    top_k= 50,            # Generation top_k
+    top_p= 1,        # Generation top_p
+    max_seq_length= 1024, # Max tokens for audio part
+    device='cuda' if torch.cuda.is_available() else 'cpu'):
 
     prompt = "".join([
         "<|task_tts|>",
@@ -63,7 +30,7 @@ def generate_speech_from_text(
     print("Generating token sequence...")
     generated_ids = model.generate(
         **model_inputs,
-        max_new_tokens=max_new_audio_tokens, # Limit generation length
+        max_new_tokens=max_seq_length, # Limit generation length
         do_sample=True,
         temperature=temperature,
         top_k=top_k,
@@ -123,10 +90,9 @@ def generate_speech_from_text(
     # print(f'wav np shape:{wav_np.shape}')
     return wav_np
 
-def infer(model, tokenizer, input_text):
+def infer(model, tokenizer, audio_tokenizer,input_text,**kwargs):
     print(f"Generating speech for: '{input_text}'")
-    text = f"{chosen_voice}: " + input_text if chosen_voice else input_text
-    generated_waveform = generate_speech_from_text(input_text)
+    generated_waveform = generate_speech_from_text(input_text, model, tokenizer, audio_tokenizer,**kwargs)
 
     if generated_waveform.size > 0:
         output_filename = "sparktts.wav"
@@ -136,6 +102,3 @@ def infer(model, tokenizer, input_text):
     else:
         print("Audio generation failed (no tokens found?).")
 
-
-if __name__ == "__main__":
-    infer(model, tokenizer, input_text)
