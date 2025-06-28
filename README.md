@@ -20,13 +20,9 @@ export LORA_PATH=''                                             # lora path
 </pre>
 
 * download model files: defaultly, download one specific charactor model set in environment variable CHARACTOR. model will be download in ./genshin  <code>
-python3 download.py
-</code>
-
+python3 download.py</code>
 * run code to convert text to audio. audio outputs sparktts.wav.  <code>
-python3 run.py
-</code>
-
+python3 run.py</code>
 # Example
 ## poetry:
 * kazuha(万叶):['play'](./examples/kazuha.wav)
