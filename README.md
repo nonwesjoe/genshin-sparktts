@@ -19,13 +19,11 @@ export IF_LORA=''                                               # defalutly lora
 export LORA_PATH=''                                             # lora path
 </pre>
 
-* download model files: defaultly, download one specific charactor model set in environment variable CHARACTOR. model will be download in ./genshin  
-<code>
+* download model files: defaultly, download one specific charactor model set in environment variable CHARACTOR. model will be download in ./genshin  <code>
 python3 download.py
 </code>
 
-* run code to convert text to audio. audio outputs sparktts.wav.  
-<code>
+* run code to convert text to audio. audio outputs sparktts.wav.  <code>
 python3 run.py
 </code>
 
