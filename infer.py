@@ -2,6 +2,7 @@ import re
 import torch
 import numpy as np
 import soundfile as sf
+from playsound import playsound
 
 @torch.inference_mode()
 def generate_speech_from_text(
@@ -99,6 +100,7 @@ def infer(model, tokenizer, audio_tokenizer,input_text,**kwargs):
         sample_rate = audio_tokenizer.config.get("sample_rate", 16000)
         sf.write(output_filename, generated_waveform, sample_rate)
         print(f"Audio saved to {output_filename}")
+        playsound(output_filename)
     else:
         print("Audio generation failed (no tokens found?).")
 
