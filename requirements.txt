@@ -33,3 +33,5 @@ tqdm==4.67.1
 transformers==4.52.4
 typing_extensions==4.12.2
 urllib3==2.5.0
+openvino>=2024.0.0
+openvino-tokenizers>=2024.0.0

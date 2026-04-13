@@ -1,0 +1,60 @@
+```gitignore
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.py~
+*.py.class
+*.py.backup
+*.swp
+*.swo
+.Python
+*.so
+*.egg-info/
+.eggs/
+.coverage
+htmlcov/
+.coverage.*
+.nox/
+.tox/
+.pytest_cache/
+.mypy_cache/
+.hypothesis/
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env/
+ENV/
+
+# Build and distribution artifacts
+dist/
+build/
+*.egg
+*.whl
+pip-log.txt
+pip-delete-this-directory.txt
+
+# OpenVINO specific
+openvino_model/
+model.xml
+model.bin
+model.mapping
+*.xml
+*.bin
+*.mapping
+
+# Logs
+*.log
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+```
