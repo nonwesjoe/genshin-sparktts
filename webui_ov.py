@@ -38,7 +38,7 @@ def get_system_status():
     sys_msg = f"CPU: {cpu}% | RAM: {mem.percent}% ({mem.used / (1024**3):.1f}GB / {mem.total / (1024**3):.1f}GB){gpu_info}"
     return loaded_msg, sys_msg
 
-def load_model(character, threads):
+def load_model(character, threads, enable_ht):
     global current_model, current_tokenizer, current_audio_tokenizer, current_character
     
     if not character:
@@ -60,13 +60,16 @@ def load_model(character, threads):
         if current_model is not None:
             unload_model()
             
-        print(f"Loading OpenVINO model for {character} with {threads} threads...")
-        ov_config = {"INFERENCE_NUM_THREADS": int(threads)}
+        print(f"Loading OpenVINO model for {character} with {threads} threads (HT: {enable_ht})...")
+        ov_config = {
+            "INFERENCE_NUM_THREADS": int(threads),
+            "ENABLE_HYPER_THREADING": "YES" if enable_ht else "NO"
+        }
         current_model = OVModelForCausalLM.from_pretrained(model_dir, device="CPU", ov_config=ov_config)
         current_tokenizer = AutoTokenizer.from_pretrained(model_dir)
         current_audio_tokenizer = BiCodecTokenizer(audio_tokenizer_dir, device)
         current_character = character
-        return f"Successfully loaded OpenVINO model for {character} (Threads: {threads})."
+        return f"Successfully loaded OpenVINO model for {character} (Threads: {threads}, HT: {enable_ht})."
     except Exception as e:
         return f"Error loading model: {str(e)}"
 
@@ -137,7 +140,9 @@ with gr.Blocks(title="Genshin Spark-TTS OpenVINO WebUI") as app:
             char_dropdown = gr.Dropdown(choices=get_available_characters(), label="选择角色 (Select Character)", info="只能选择已经导出到 genshin_ov 的角色")
             refresh_btn = gr.Button("刷新角色列表 (Refresh List)")
             
-            threads_slider = gr.Slider(minimum=1, maximum=os.cpu_count() or 16, value=(os.cpu_count() or 8), step=1, label="推理线程数 (Inference Threads)", info="设置 OpenVINO CPU 推理使用的线程数，建议设为 CPU 核心数")
+            with gr.Row():
+                threads_slider = gr.Slider(minimum=1, maximum=os.cpu_count() or 16, value=(os.cpu_count() or 8), step=1, label="推理线程数 (Inference Threads)")
+                ht_checkbox = gr.Checkbox(label="启用超线程 (Enable Hyper-Threading)", value=True, info="如果部署在服务器上，建议关闭此项只使用物理核。")
             
             with gr.Row():
                 load_btn = gr.Button("加载模型 (Load)", variant="primary")
@@ -154,7 +159,7 @@ with gr.Blocks(title="Genshin Spark-TTS OpenVINO WebUI") as app:
 
     # Event handlers
     refresh_btn.click(fn=update_choices, outputs=char_dropdown)
-    load_btn.click(fn=load_model, inputs=[char_dropdown, threads_slider], outputs=[status_text])
+    load_btn.click(fn=load_model, inputs=[char_dropdown, threads_slider, ht_checkbox], outputs=[status_text])
     unload_btn.click(fn=unload_model, outputs=[status_text])
     
     generate_btn.click(fn=generate_audio, inputs=[input_text], outputs=[output_audio, infer_status])
