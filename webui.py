@@ -8,12 +8,18 @@ from huggingface_hub import snapshot_download, HfApi
 import gc
 import psutil
 import time
+import threading
 
 # Global state for loaded model
 current_model = None
 current_tokenizer = None
 current_audio_tokenizer = None
 current_character = None
+model_lock = threading.Lock() # Lock to ensure thread safety for multi-user concurrent access
+
+# Global state for shared UI status
+global_model_status = "就绪 (Ready)"
+global_infer_status = "就绪 (Ready)"
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 max_seq_length = 1024
@@ -25,7 +31,7 @@ def get_available_characters():
     return sorted(chars)
 
 def get_system_status():
-    global current_character
+    global current_character, global_model_status, global_infer_status
     cpu = psutil.cpu_percent()
     mem = psutil.virtual_memory()
     gpu_info = ""
@@ -35,40 +41,56 @@ def get_system_status():
     
     loaded_msg = f"当前加载的模型 (Loaded): {current_character if current_character else '无 (None)'}"
     sys_msg = f"CPU: {cpu}% | RAM: {mem.percent}% ({mem.used / (1024**3):.1f}GB / {mem.total / (1024**3):.1f}GB){gpu_info}"
-    return loaded_msg, sys_msg
+    return loaded_msg, sys_msg, global_model_status, global_infer_status
 
 def load_model(character):
-    global current_model, current_tokenizer, current_audio_tokenizer, current_character
+    global current_model, current_tokenizer, current_audio_tokenizer, current_character, global_model_status
     
     if not character:
-        return "Please select or enter a character name."
+        global_model_status = "Please select or enter a character name."
+        yield global_model_status
+        return
         
     if current_character == character:
-        return f"Model for {character} is already loaded."
+        global_model_status = f"Model for {character} is already loaded."
+        yield global_model_status
+        return
         
     model_dir = os.path.join("genshin", character)
     audio_tokenizer_dir = os.path.join("genshin", "Spark-TTS-0.5B")
     
     if not os.path.exists(model_dir):
-        return f"Model for {character} not found locally. Please download it first."
+        global_model_status = f"Model for {character} not found locally. Please download it first."
+        yield global_model_status
+        return
     if not os.path.exists(audio_tokenizer_dir):
-        return "Base model (Spark-TTS-0.5B) not found. Please download it first."
+        global_model_status = "Base model (Spark-TTS-0.5B) not found. Please download it first."
+        yield global_model_status
+        return
         
-    try:
-        # Unload previous first if exists to save VRAM
-        if current_model is not None:
-            unload_model()
+    with model_lock:
+        try:
+            # Unload previous first if exists to save VRAM
+            if current_model is not None:
+                global_model_status = "Unloading previous model..."
+                yield global_model_status
+                unload_model_internal()
+                
+            global_model_status = f"Loading model for {character}..."
+            yield global_model_status
             
-        print(f"Loading model for {character}...")
-        current_model = AutoModelForCausalLM.from_pretrained(model_dir, device_map=device)
-        current_tokenizer = AutoTokenizer.from_pretrained(model_dir)
-        current_audio_tokenizer = BiCodecTokenizer(audio_tokenizer_dir, device)
-        current_character = character
-        return f"Successfully loaded model for {character}."
-    except Exception as e:
-        return f"Error loading model: {str(e)}"
+            print(global_model_status)
+            current_model = AutoModelForCausalLM.from_pretrained(model_dir, device_map=device)
+            current_tokenizer = AutoTokenizer.from_pretrained(model_dir)
+            current_audio_tokenizer = BiCodecTokenizer(audio_tokenizer_dir, device)
+            current_character = character
+            global_model_status = f"Successfully loaded model for {character}."
+            yield global_model_status
+        except Exception as e:
+            global_model_status = f"Error loading model: {str(e)}"
+            yield global_model_status
 
-def unload_model():
+def unload_model_internal():
     global current_model, current_tokenizer, current_audio_tokenizer, current_character
     if current_model is not None:
         del current_model
@@ -83,6 +105,14 @@ def unload_model():
             torch.cuda.empty_cache()
         return "Model unloaded successfully."
     return "No model is currently loaded."
+
+def unload_model():
+    global global_model_status
+    global_model_status = "Unloading model..."
+    yield global_model_status
+    with model_lock:
+        global_model_status = unload_model_internal()
+        yield global_model_status
 
 def download_character(character, progress=gr.Progress(track_tqdm=True)):
     if not character:
@@ -121,39 +151,50 @@ def download_character(character, progress=gr.Progress(track_tqdm=True)):
         return f"下载 {character} 时出错: {str(e)}", gr.update()
 
 def generate_audio(text):
-    global current_model, current_tokenizer, current_audio_tokenizer, current_character
+    global current_model, current_tokenizer, current_audio_tokenizer, current_character, global_infer_status
     
     if current_model is None:
-        return None, "❌ 错误：请先加载一个角色模型。"
+        global_infer_status = "❌ 错误：请先加载一个角色模型。"
+        yield None, global_infer_status
+        return
         
     if not text:
-        return None, "❌ 错误：请输入需要合成的文本。"
+        global_infer_status = "❌ 错误：请输入需要合成的文本。"
+        yield None, global_infer_status
+        return
         
-    try:
-        from infer import generate_speech_from_text
+    global_infer_status = f"正在生成音频 (Generating): {text[:20]}..."
+    yield None, global_infer_status
         
-        start_time = time.time()
-        
-        generated_waveform = generate_speech_from_text(
-            text, 
-            current_model, 
-            current_tokenizer, 
-            current_audio_tokenizer,
-            max_seq_length=max_seq_length,
-            device=device
-        )
-        
-        elapsed_time = time.time() - start_time
-        
-        if generated_waveform.size > 0:
-            output_filename = "temp_output.wav"
-            sample_rate = current_audio_tokenizer.config.get("sample_rate", 16000)
-            sf.write(output_filename, generated_waveform, sample_rate)
-            return output_filename, f"✅ 生成成功！\n耗时: {elapsed_time:.2f} 秒\n文本: {text}"
-        else:
-            return None, "❌ 错误：音频生成失败（未找到有效的音频 token）。"
-    except Exception as e:
-        return None, f"❌ 错误：生成过程中出现异常: {str(e)}"
+    with model_lock:
+        try:
+            from infer import generate_speech_from_text
+            
+            start_time = time.time()
+            
+            generated_waveform = generate_speech_from_text(
+                text, 
+                current_model, 
+                current_tokenizer, 
+                current_audio_tokenizer,
+                max_seq_length=max_seq_length,
+                device=device
+            )
+            
+            elapsed_time = time.time() - start_time
+            
+            if generated_waveform.size > 0:
+                output_filename = "temp_output.wav"
+                sample_rate = current_audio_tokenizer.config.get("sample_rate", 16000)
+                sf.write(output_filename, generated_waveform, sample_rate)
+                global_infer_status = f"✅ 生成成功！\n耗时: {elapsed_time:.2f} 秒\n文本: {text}"
+                yield output_filename, global_infer_status
+            else:
+                global_infer_status = "❌ 错误：音频生成失败（未找到有效的音频 token）。"
+                yield None, global_infer_status
+        except Exception as e:
+            global_infer_status = f"❌ 错误：生成过程中出现异常: {str(e)}"
+            yield None, global_infer_status
 
 def update_choices():
     return gr.update(choices=get_available_characters())
@@ -193,7 +234,7 @@ with gr.Blocks(title="Genshin Spark-TTS WebUI") as app:
     
     generate_btn.click(fn=generate_audio, inputs=[input_text], outputs=[output_audio, infer_status])
     
-    gr.Timer(2).tick(fn=get_system_status, inputs=None, outputs=[current_model_info, system_stats_info])
+    gr.Timer(2).tick(fn=get_system_status, inputs=None, outputs=[current_model_info, system_stats_info, status_text, infer_status])
 
 if __name__ == "__main__":
     app.launch(server_name="0.0.0.0", server_port=7861, share=False)
