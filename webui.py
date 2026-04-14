@@ -4,8 +4,10 @@ import gradio as gr
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from sparktts.models.audio_tokenizer import BiCodecTokenizer
 import soundfile as sf
-from huggingface_hub import snapshot_download
+from huggingface_hub import snapshot_download, HfApi
 import gc
+import psutil
+import time
 
 # Global state for loaded model
 current_model = None
@@ -19,14 +21,30 @@ max_seq_length = 1024
 def get_available_characters():
     if not os.path.exists("genshin"):
         return []
-    chars = [d for d in os.listdir("genshin") if os.path.isdir(os.path.join("genshin", d)) and d != "Spark-TTS-0.5B"]
+    chars = [d for d in os.listdir("genshin") if os.path.isdir(os.path.join("genshin", d)) and d != "Spark-TTS-0.5B" and not d.startswith('.')]
     return sorted(chars)
+
+def get_system_status():
+    global current_character
+    cpu = psutil.cpu_percent()
+    mem = psutil.virtual_memory()
+    gpu_info = ""
+    if torch.cuda.is_available():
+        gpu_mem = torch.cuda.memory_allocated() / (1024**3)
+        gpu_info = f" | GPU VRAM Allocated: {gpu_mem:.1f}GB"
+    
+    loaded_msg = f"当前加载的模型 (Loaded): {current_character if current_character else '无 (None)'}"
+    sys_msg = f"CPU: {cpu}% | RAM: {mem.percent}% ({mem.used / (1024**3):.1f}GB / {mem.total / (1024**3):.1f}GB){gpu_info}"
+    return loaded_msg, sys_msg
 
 def load_model(character):
     global current_model, current_tokenizer, current_audio_tokenizer, current_character
     
     if not character:
         return "Please select or enter a character name."
+        
+    if current_character == character:
+        return f"Model for {character} is already loaded."
         
     model_dir = os.path.join("genshin", character)
     audio_tokenizer_dir = os.path.join("genshin", "Spark-TTS-0.5B")
@@ -66,11 +84,20 @@ def unload_model():
         return "Model unloaded successfully."
     return "No model is currently loaded."
 
-def download_character(character):
+def download_character(character, progress=gr.Progress(track_tqdm=True)):
     if not character:
-        return "Please enter a character name to download.", gr.update()
+        return "请输入要下载的角色名。", gr.update()
     
     try:
+        progress(0, desc="正在获取云端角色列表...")
+        api = HfApi()
+        files = api.list_repo_files("wesjos/spark-tts-genshin-charactors-new")
+        remote_chars = set([f.split('/')[0] for f in files if '/' in f and not f.startswith('.')])
+        
+        if character not in remote_chars:
+            return f"❌ 角色 '{character}' 不存在。\n云端可用角色: {', '.join(sorted(list(remote_chars)))}", gr.update()
+
+        progress(0.1, desc="正在检查基础模型 (Spark-TTS-0.5B)...")
         # Download base model if not exists
         if not os.path.exists(os.path.join("genshin", "Spark-TTS-0.5B")):
             snapshot_download(
@@ -79,28 +106,34 @@ def download_character(character):
                 allow_patterns=["Spark-TTS-0.5B/*"],
             )
             
-        # Download character model
+        progress(0.2, desc=f"正在下载角色模型 {character}...")
+        # Download character model from the new repository
         snapshot_download(
-            repo_id="wesjos/spark-tts-genshin-charactors",
+            repo_id="wesjos/spark-tts-genshin-charactors-new",
             local_dir="genshin",
             allow_patterns=[f"{character}/*"],
         )
+        
+        progress(1.0, desc="下载完成！")
         chars = get_available_characters()
-        return f"Successfully downloaded {character}.", gr.update(choices=chars, value=character)
+        return f"✅ 成功下载 {character}。", gr.update(choices=chars, value=character)
     except Exception as e:
-        return f"Error downloading {character}: {str(e)}", gr.update()
+        return f"下载 {character} 时出错: {str(e)}", gr.update()
 
 def generate_audio(text):
     global current_model, current_tokenizer, current_audio_tokenizer, current_character
     
     if current_model is None:
-        return None, "Please load a model first."
+        return None, "❌ 错误：请先加载一个角色模型。"
         
     if not text:
-        return None, "Please enter some text."
+        return None, "❌ 错误：请输入需要合成的文本。"
         
     try:
         from infer import generate_speech_from_text
+        
+        start_time = time.time()
+        
         generated_waveform = generate_speech_from_text(
             text, 
             current_model, 
@@ -110,15 +143,17 @@ def generate_audio(text):
             device=device
         )
         
+        elapsed_time = time.time() - start_time
+        
         if generated_waveform.size > 0:
             output_filename = "temp_output.wav"
             sample_rate = current_audio_tokenizer.config.get("sample_rate", 16000)
             sf.write(output_filename, generated_waveform, sample_rate)
-            return output_filename, "Generation successful!"
+            return output_filename, f"✅ 生成成功！\n耗时: {elapsed_time:.2f} 秒\n文本: {text}"
         else:
-            return None, "Audio generation failed (no tokens found)."
+            return None, "❌ 错误：音频生成失败（未找到有效的音频 token）。"
     except Exception as e:
-        return None, f"Error during generation: {str(e)}"
+        return None, f"❌ 错误：生成过程中出现异常: {str(e)}"
 
 def update_choices():
     return gr.update(choices=get_available_characters())
@@ -126,6 +161,10 @@ def update_choices():
 with gr.Blocks(title="Genshin Spark-TTS WebUI") as app:
     gr.Markdown("# Genshin Spark-TTS WebUI\n可以选择角色加载模型，也可以卸载模型以释放显存。")
     
+    with gr.Row():
+        current_model_info = gr.Textbox(label="当前加载模型 (Current Model)", interactive=False)
+        system_stats_info = gr.Textbox(label="系统资源 (System Stats)", interactive=False)
+
     with gr.Row():
         with gr.Column():
             gr.Markdown("### 1. 模型管理 (Model Management)")
@@ -153,6 +192,8 @@ with gr.Blocks(title="Genshin Spark-TTS WebUI") as app:
     unload_btn.click(fn=unload_model, outputs=[status_text])
     
     generate_btn.click(fn=generate_audio, inputs=[input_text], outputs=[output_audio, infer_status])
+    
+    gr.Timer(2).tick(fn=get_system_status, inputs=None, outputs=[current_model_info, system_stats_info])
 
 if __name__ == "__main__":
-    app.launch(server_name="0.0.0.0", share=False)
+    app.launch(server_name="0.0.0.0", server_port=7861, share=False)

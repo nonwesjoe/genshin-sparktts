@@ -1,4 +1,5 @@
 import re
+import time
 import torch
 import numpy as np
 import soundfile as sf
@@ -27,7 +28,12 @@ def generate_speech_from_text(
 
     model_inputs = tokenizer([prompt], return_tensors="pt").to(device)
 
-    print("Generating token sequence...")
+    print(f"\n{'='*50}")
+    print(f"🎙️  [Inference] Text: {text}")
+    print(f"{'-'*50}")
+    
+    start_time = time.time()
+    print("⏳ [1/2] Generating token sequence...", end="", flush=True)
     generated_ids = model.generate(
         **model_inputs,
         max_new_tokens=max_seq_length, # Limit generation length
@@ -38,7 +44,8 @@ def generate_speech_from_text(
         eos_token_id=tokenizer.eos_token_id, # Stop token
         pad_token_id=tokenizer.pad_token_id # Use models pad token id
     )
-    print("Token sequence generated.")
+    token_gen_time = time.time() - start_time
+    print(f" Done! ({token_gen_time:.2f}s)")
     # print(f'length of generated_ids: {len(generated_ids[0])}')
 
     generated_ids_trimmed = generated_ids[:, model_inputs.input_ids.shape[1]:]
@@ -71,12 +78,12 @@ def generate_speech_from_text(
     # print(f'global_ids: {pred_global_ids}')
     # print(f'semantic_ids: {pred_semantic_ids}')
 
-    print(f"Found {pred_semantic_ids.shape[1]} semantic tokens.")
-    print(f"Found {pred_global_ids.shape[2]} global tokens.")
+    print(f"📊 Found {pred_semantic_ids.shape[1]} semantic tokens, {pred_global_ids.shape[2]} global tokens.")
 
 
     # 5. Detokenize using BiCodecTokenizer
-    print("Detokenizing audio tokens...")
+    start_time = time.time()
+    print("⏳ [2/2] Detokenizing audio tokens...", end="", flush=True)
     # Ensure audio_tokenizer and its internal model are on the correct device
     audio_tokenizer.device = device
     audio_tokenizer.model.to(device)
@@ -86,7 +93,10 @@ def generate_speech_from_text(
         pred_global_ids.to(device).squeeze(0), # Shape (1, N_global)
         pred_semantic_ids.to(device)           # Shape (1, N_semantic)
     )
-    print("Detokenization complete.")
+    detokenize_time = time.time() - start_time
+    print(f" Done! ({detokenize_time:.2f}s)")
+    print(f"✅ Total Inference Time: {token_gen_time + detokenize_time:.2f}s")
+    print(f"{'='*50}\n")
     # print(f'wav np shape:{wav_np.shape}')
     return wav_np
 
